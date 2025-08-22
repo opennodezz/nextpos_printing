@@ -5,6 +5,18 @@ app_description = "An plugin app to help communicate with QZ tray to handle ther
 app_email = "support@opennodes.ca"
 app_license = "mit"
 
+#--------------------------------------------NextPOS Printing app additions start
+
+page_js = {
+    "point-of-sale": [
+        "public/js/nextpos_pos.js",
+        "public/js/qz-tray.js"
+        ]
+}
+
+
+#--------------------------------------------NextPOS Printing app additions end
+
 # Apps
 # ------------------
 
