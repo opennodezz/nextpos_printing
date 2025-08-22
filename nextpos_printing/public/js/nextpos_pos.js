@@ -66,11 +66,36 @@ async function sendCutTest() {
       // encoding: "CP437"     // common ESC/POS charset
     });
 
-    // ESC/POS: init, "CUT TEST\n", feed 3, full cut
     const data = [{
-      type: "raw", format: "hex",
-      data: ["1B40","43555420544553540A","1B6403","1D5600"].join("")
+    type: "raw",
+    format: "hex",
+    data: [
+        "1B40", // ESC @ (init)
+        "1B6101", // ESC a 1 (center)
+        "4F50454E204E4F444520534F4C5554494F4E530A", // "OPEN NODE SOLUTIONS\n"
+        "1B6100", // ESC a 0 (left align)
+        "446174653A20323032352D30382D32322031323A33300A", // "Date: 2025-08-22 12:30\n"
+        "436173686965723A204A6F686E20446F650A", // "Cashier: John Doe\n"
+        "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
+        "4974656D2020202020202020202051727479202050726963650A", // "Item            Qty   Price\n"
+        "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
+        "436F666665652020202020202020203120202024322E35300A", // "Coffee          1    $2.50\n"
+        "53616E6477696368202020202020203220202024362E30300A", // "Sandwich        2    $6.00\n"
+        "43616E20436F6B6520202020202020312020202024312E35300A", // "Can Coke        1    $1.50\n"
+        "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
+        "537562746F74616C3A2020202020202020202020202024302E30300A", // "Subtotal:           $10.00\n"
+        "5461782028313525293A2020202020202020202024302E35300A", // "Tax (15%):          $0.50\n"
+        "544F54414C3A202020202020202020202020202020202431302E35300A", // "TOTAL:              $10.50\n"
+        "0A0A", // extra spacing
+        "1B6101", // center again
+        "5468616E6B20796F7520666F722073686F7070696E67210A", // "Thank you for shopping!\n"
+        "1B6100", // back to left
+        "0A0A0A0A0A", // feed 5 lines
+        "1D5600" // GS V 0 (full cut)
+    ].join("")
     }];
+
+
 
     await qz.print(cfg, data);  // <— pass CONFIG, not printer name
     frappe.show_alert({ message: `Sent cut test to: ${printer}`, indicator: "green" });
