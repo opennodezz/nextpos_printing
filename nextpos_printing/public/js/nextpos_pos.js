@@ -11,14 +11,75 @@
     ];
 
     async function ensureQZ() {
-        if (!window.qz) throw new Error("QZ Tray library not loaded");
+        if (!window.qz) {
+            frappe.msgprint({
+                title: "QZ Tray Not Loaded",
+                indicator: "red",
+                message: `
+                    QZ Tray library is missing.<br>
+                    <a href="https://qz.io/download/" target="_blank">Download QZ Tray</a>
+                `
+            });
+            throw new Error("QZ Tray library not loaded");
+        }
+
         if (qz.websocket.isActive()) return;
+
         try {
             setupQZSecurity();
             await qz.websocket.connect();
         } catch (e) {
-            console.warn("[nextpos_printing] QZ connect skipped:", e);
-            // Don't rethrow — keep POS running even if QZ fails
+            frappe.msgprint({
+                title: "QZ Tray Not Running",
+                indicator: "red",
+                message: `
+                    QZ Tray is not running or not accessible.<br>
+                    Please <a href="https://qz.io/download/" target="_blank">download QZ Tray</a> 
+                    or start it from your system tray.
+                `
+            });
+            throw e;
+        }
+    }
+
+
+    async function getPrinterOrPrompt() {
+        try {
+            // Try default printer
+            return await qz.printers.getDefault();
+        } catch (e) {
+            console.warn("[nextpos_printing] Default printer not found, prompting...");
+
+            // Fetch list of printers
+            const printers = await qz.printers.find();
+
+            if (!printers || printers.length === 0) {
+                frappe.msgprint({
+                    title: "No Printers Found",
+                    indicator: "red",
+                    message: "QZ Tray is running but no printers were detected."
+                });
+                throw new Error("No printers available");
+            }
+
+            // Build picker HTML
+            let options = printers.map(p => `<option value="${p}">${p}</option>`).join("");
+            let selectHtml = `<select id="printer-picker" style="width:100%">${options}</select>`;
+
+            // Show picker dialog
+            return new Promise((resolve, reject) => {
+                const d = new frappe.ui.Dialog({
+                    title: "Select Printer",
+                    fields: [{ fieldtype: "HTML", fieldname: "printer_list", options: selectHtml }],
+                    primary_action_label: "Select",
+                    primary_action: () => {
+                        const chosen = d.$wrapper.find("#printer-picker").val();
+                        d.hide();
+                        resolve(chosen);
+                    }
+                });
+                d.show();
+            });
         }
     }
 
@@ -126,25 +187,43 @@
 
         qz.security.setSignaturePromise((toSign) => (resolve, reject) => {
             fetch('/api/method/nextpos_printing.api.qz.qz_sign', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Frappe-CSRF-Token': frappe.csrf_token || ''
-            },
-            body: JSON.stringify({ toSign })
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': frappe.csrf_token || ''
+                },
+                body: JSON.stringify({ toSign })
             })
             .then(r => r.json())
             .then(j => {
-                if (!j || !j.message) throw new Error("No signature returned");
-                resolve(j.message);              // base64 signature
+                if (!j || !j.message) {
+                    frappe.msgprint({
+                        title: "QZ Signing Failed",
+                        indicator: "red",
+                        message: `
+                            Could not sign request.<br>
+                            Please check that <code>npp_private_key</code> is set in site_config.json.
+                        `
+                    });
+                    throw new Error("Signing failed, check site_config.json");
+                }
+                resolve(j.message);
             })
-            .catch(reject);
+            .catch(err => {
+                frappe.msgprint({
+                    title: "QZ Signing Error",
+                    indicator: "red",
+                    message: `Error while signing: ${err}`
+                });
+                reject(err);
+            });
         });
+
     }
 
     window.printInvoiceWithQZ = async function(invoiceName) {
         await ensureQZ();
-        const printer = await getDefaultPrinter();
+        const printer = await getPrinterOrPrompt();
 
         const resp = await fetch(
             `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}`

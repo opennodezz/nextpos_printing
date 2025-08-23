@@ -1,0 +1,12 @@
+{{ company_name }}
+{{ company_address }}
+--------------------------
+{% for item in items %}
+{{ item.item_name[:20] }} {{ "%.0f"|format(item.qty) }} x {{ "%.2f"|format(item.rate) }} {{ "%.2f"|format(item.amount) }}
+{% endfor %}
+--------------------------
+TOTAL: {{ "%.2f"|format(grand_total) }}
+Paid:  {{ "%.2f"|format(paid_amount) }}
+Change:{{ "%.2f"|format(change_amount) }}
+--------------------------
+Thank you, come again!
