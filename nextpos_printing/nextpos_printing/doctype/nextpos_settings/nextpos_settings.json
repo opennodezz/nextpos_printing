@@ -1,0 +1,32 @@
+{
+  "doctype": "DocType",
+  "name": "NextPOS Settings",
+  "module": "Nextpos Printing",
+  "custom": 0,
+  "issingle": 1,
+  "editable_grid": 0,
+  "track_changes": 0,
+  "fields": [
+        {
+            "fieldname": "default_printer",
+            "label": "Default Printer",
+            "fieldtype": "Data",
+            "reqd": 0
+        },
+        {
+            "fieldname": "enable_debug",
+            "label": "Enable Debug Logging",
+            "fieldtype": "Check"
+        }
+    ],
+
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}

@@ -14,8 +14,6 @@ page_js = {
         ]
 }
 
-after_install = "nextpos_printing.install.after_install"
-
 
 #--------------------------------------------NextPOS Printing app additions end
 
