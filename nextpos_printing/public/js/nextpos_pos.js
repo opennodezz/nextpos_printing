@@ -192,26 +192,30 @@
             data = [data];
         }
 
-        // Add cut/feeding (same logic as before)
-        if (cut_mode && cut_mode !== "None") {
-            let cutCommand = {
-                type: "raw",
-                format: "command",
-                data: ""
-            };
+    if (cut_mode && cut_mode !== "None") {
+        let cutCommand = {
+            type: "raw",
+            format: "hex",
+            data: ""
+        };
 
-            if (feed_before_cut && feed_before_cut > 0) {
-                cutCommand.data += `\x1B\x64${String.fromCharCode(feed_before_cut)}`;
-            }
-
-            if (cut_mode === "Full Cut") {
-                cutCommand.data += "\x1D\x56\x00";
-            } else if (cut_mode === "Partial Cut") {
-                cutCommand.data += "\x1D\x56\x01";
-            }
-
-            data.push(cutCommand);
+        // Feed lines before cut
+        if (feed_before_cut && parseInt(feed_before_cut) > 0) {
+            const n = parseInt(feed_before_cut);
+            // ESC d n (feed n lines)
+            cutCommand.data += "1B64" + n.toString(16).padStart(2, "0");
         }
+
+        // Add cut command
+        if (cut_mode === "Full Cut") {
+            cutCommand.data += "1D5600"; // GS V 0
+        } else if (cut_mode === "Partial Cut") {
+            cutCommand.data += "1D5601"; // GS V 1
+        }
+
+        data.push(cutCommand);
+    }
+
 
         // Create config
         const cfg = qz.configs.create(printer);
