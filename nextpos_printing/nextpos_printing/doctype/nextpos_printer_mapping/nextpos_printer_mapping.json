@@ -1,0 +1,31 @@
+{
+  "doctype": "DocType",
+  "name": "NextPOS Printer Mapping",
+  "module": "Nextpos Printing",
+  "custom": 0,
+  "istable": 1,
+  "editable_grid": 1,
+  "fields": [
+    {
+      "fieldname": "pos_profile",
+      "label": "POS Profile",
+      "fieldtype": "Link",
+      "options": "POS Profile",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "printer",
+      "label": "Printer",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "auto_cut",
+      "label": "Enable Auto-Cut",
+      "fieldtype": "Check",
+      "in_list_view": 1
+    }
+  ]
+}

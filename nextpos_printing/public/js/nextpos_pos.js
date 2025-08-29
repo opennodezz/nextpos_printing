@@ -1,8 +1,6 @@
 // nextpos_printing/public/js/nextpos_pos.js
 
 (function () {
-    const BTN_ID = "nextpos-raw-print-btn";
-
     const TOOLBAR_SELECTORS = [
         ".pos-bill-toolbar",
         ".pos-actions",
@@ -43,7 +41,37 @@
         }
     }
 
-    // Prompt user if no default printer is available
+    // --- SETTINGS-DRIVEN PRINTER LOOKUP ---
+    async function getPrinterForProfile(posProfile) {
+        try {
+            const res = await frappe.call({
+                method: "nextpos_printing.utils.settings.get_printer_for_pos",
+                args: { pos_profile: posProfile }
+            });
+
+            if (!res.message) return null;
+
+            const mapping = res.message;
+            const printers = await qz.printers.find();
+
+            if (printers.includes(mapping.printer)) {
+                return { printer: mapping.printer, auto_cut: mapping.auto_cut };
+            } else {
+                frappe.msgprint(
+                    `Configured printer "${mapping.printer}" not found. Using Default Printer.`
+                );
+                return {
+                    printer: mapping.default_printer || printers[0],
+                    auto_cut: mapping.auto_cut
+                };
+            }
+        } catch (err) {
+            console.error("[nextpos_printing] Failed to fetch printer mapping:", err);
+            return null;
+        }
+    }
+
+    // Prompt user if no mapping/default printer is available
     async function getPrinterOrPrompt() {
         try {
             return await qz.printers.getDefault();
@@ -75,55 +103,6 @@
                     }
                 });
                 d.show();
-            });
-        }
-    }
-
-    // --- TEST PRINT ---
-    async function sendCutTest() {
-        try {
-            await ensureQZ();
-            const printer = await getPrinterOrPrompt();
-
-            const cfg = qz.configs.create(printer);
-
-            const data = [{
-                type: "raw",
-                format: "hex",
-                data: [
-                    "1B40", // ESC @ (init)
-                    "1B6101", // ESC a 1 (center)
-                    "4F50454E204E4F444520534F4C5554494F4E530A", // "OPEN NODE SOLUTIONS\n"
-                    "1B6100", // ESC a 0 (left align)
-                    "446174653A20323032352D30382D32322031323A33300A", // "Date: 2025-08-22 12:30\n"
-                    "436173686965723A204A6F686E20446F650A", // "Cashier: John Doe\n"
-                    "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
-                    "4974656D2020202020202020202051727479202050726963650A", // "Item            Qty   Price\n"
-                    "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
-                    "436F666665652020202020202020203120202024322E35300A", // "Coffee          1    $2.50\n"
-                    "53616E6477696368202020202020203220202024362E30300A", // "Sandwich        2    $6.00\n"
-                    "43616E20436F6B6520202020202020312020202024312E35300A", // "Can Coke        1    $1.50\n"
-                    "2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D0A", // -------------------
-                    "537562746F74616C3A2020202020202020202020202024302E30300A", // "Subtotal:           $10.00\n"
-                    "5461782028313525293A2020202020202020202024302E35300A", // "Tax (15%):          $0.50\n"
-                    "544F54414C3A202020202020202020202020202020202431302E35300A", // "TOTAL:              $10.50\n"
-                    "0A0A", // extra spacing
-                    "1B6101", // center again
-                    "5468616E6B20796F7520666F722073686F7070696E67210A", // "Thank you for shopping!\n"
-                    "1B6100", // back to left
-                    "0A0A0A0A0A", // feed 5 lines
-                    "1D5600" // GS V 0 (full cut)
-                ].join("")
-            }];
-
-            await qz.print(cfg, data);
-            frappe.show_alert({ message: `Sent cut test to: ${printer}`, indicator: "green" });
-        } catch (e) {
-            console.error("[nextpos_printing] QZ error:", e);
-            frappe.msgprint({
-                title: "QZ Tray",
-                message: `Could not print: ${e.message || e}`,
-                indicator: "red"
             });
         }
     }
@@ -177,86 +156,95 @@
         });
     }
 
-    // --- INVOICE PRINTING ---
     window.printInvoiceWithQZ = async function (invoiceName) {
         await ensureQZ();
-        const printer = await getPrinterOrPrompt();
 
+        let posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
+        let printerConfig = await getPrinterForProfile(posProfile);
+
+        let printer = (printerConfig && printerConfig.printer) || await getPrinterOrPrompt();
+        let autoCut = !!(printerConfig && parseInt(printerConfig.auto_cut) === 1);
+
+        // Send cut flag to backend
         const resp = await fetch(
-            `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}`
+            `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}&cut=${autoCut ? 1 : 0}`
         ).then(r => r.json());
 
-        const data = resp.message;
+        let data = resp.message;
         const cfg = qz.configs.create(printer);
 
         return qz.print(cfg, data)
-            .then(() => console.log("Printed successfully"))
+            .then(() => console.log(`Printed to ${printer} (autoCut=${autoCut})`))
             .catch(err => console.error("Print failed", err));
     };
 
-    // Add Print Current and Reprint Last buttons
     function add_invoice_buttons() {
-        const actions = document.querySelector(".pos-bill-toolbar") || document.querySelector(".pos-actions");
-        if (!actions) return;
+        for (const sel of TOOLBAR_SELECTORS) {
+            const actions = document.querySelector(sel);
+            if (!actions) continue;
 
-        // Print Current Invoice
-        const currentBtn = document.createElement("button");
-        currentBtn.className = "btn btn-primary";
-        currentBtn.innerHTML = `<i class="fa fa-print" style="margin-right:6px"></i> Print Current Invoice`;
-        currentBtn.onclick = async () => {
-            const invoice = cur_frm && cur_frm.doc;
-            if (!invoice || invoice.doctype !== "POS Invoice") {
-                frappe.msgprint("No POS Invoice is currently open");
-                return;
-            }
-            await printInvoiceWithQZ(invoice.name);
-        };
+            if (document.getElementById("npp-print-current-btn")) return; // prevent duplicates
 
-        // Reprint Last Invoice
-        const lastBtn = document.createElement("button");
-        lastBtn.className = "btn btn-secondary";
-        lastBtn.style.marginLeft = "6px";
-        lastBtn.innerHTML = `<i class="fa fa-history" style="margin-right:6px"></i> Reprint Last Invoice`;
-        lastBtn.onclick = async () => {
-            try {
-                const res = await frappe.db.get_list('POS Invoice', {
-                    fields: ['name'],
-                    filters: { docstatus: 1 },
-                    order_by: 'creation desc',
-                    limit: 1
-                });
-                if (!res || res.length === 0) {
-                    frappe.msgprint("No submitted POS invoices found");
+            // Print Current
+            const currentBtn = document.createElement("button");
+            currentBtn.id = "npp-print-current-btn";
+            currentBtn.className = "btn btn-primary";
+            currentBtn.innerHTML = `<i class="fa fa-print" style="margin-right:6px"></i> Print Current Invoice`;
+            currentBtn.onclick = async () => {
+                const invoice = cur_frm && cur_frm.doc;
+                if (!invoice || invoice.doctype !== "POS Invoice") {
+                    frappe.msgprint("No POS Invoice is currently open");
                     return;
                 }
-                await printInvoiceWithQZ(res[0].name);
-            } catch (err) {
-                frappe.msgprint("Error fetching last invoice: " + err);
-            }
-        };
+                await printInvoiceWithQZ(invoice.name);
+            };
 
-        actions.prepend(lastBtn);
-        actions.prepend(currentBtn);
+            // Reprint Last
+            const lastBtn = document.createElement("button");
+            lastBtn.id = "npp-reprint-last-btn";
+            lastBtn.className = "btn btn-secondary";
+            lastBtn.style.marginLeft = "6px";
+            lastBtn.innerHTML = `<i class="fa fa-history" style="margin-right:6px"></i> Reprint Last Invoice`;
+            lastBtn.onclick = async () => {
+                try {
+                    const res = await frappe.db.get_list('POS Invoice', {
+                        fields: ['name'],
+                        filters: { docstatus: 1 },
+                        order_by: 'creation desc',
+                        limit: 1
+                    });
+                    if (!res || res.length === 0) {
+                        frappe.msgprint("No submitted POS invoices found");
+                        return;
+                    }
+                    await printInvoiceWithQZ(res[0].name);
+                } catch (err) {
+                    frappe.msgprint("Error fetching last invoice: " + err);
+                }
+            };
+
+            actions.prepend(lastBtn);
+            actions.prepend(currentBtn);
+            console.log("[nextpos_printing] Added NPP buttons to", sel);
+            return;
+        }
     }
+
+
 
     function replace_print_receipt_button() {
         const host = document.querySelector(".summary-btns");
         if (!host) return;
 
-        // Find original ERPNext button
         const oldBtn = host.querySelector(".summary-btn.print-btn");
-        if (oldBtn) {
-            oldBtn.style.display = "none"; // hide it
-        }
+        if (oldBtn) oldBtn.style.display = "none";
 
-        // Prevent duplicate injection
         if (document.getElementById("npp-print-btn")) return;
 
-        // Create our replacement
         const newBtn = document.createElement("button");
         newBtn.id = "npp-print-btn";
         newBtn.type = "button";
-        newBtn.className = "summary-btn btn btn-primary"; // matches ERPNext styling
+        newBtn.className = "summary-btn btn btn-primary";
         newBtn.innerHTML = `<i class="fa fa-print" style="margin-right:6px"></i> Print Receipt (NPP)`;
 
         newBtn.onclick = async () => {
@@ -268,7 +256,6 @@
             await printInvoiceWithQZ(invoice.name);
         };
 
-        // Insert our button into the same place
         host.prepend(newBtn);
         console.log("[nextpos_printing] Replaced ERPNext Print Receipt button with NPP version");
     }
@@ -276,43 +263,7 @@
     function watch_summary_btns() {
         const mo = new MutationObserver(() => replace_print_receipt_button());
         mo.observe(document.body, { childList: true, subtree: true });
-        // optional timeout to stop watching
-        // setTimeout(() => mo.disconnect(), 60000);
     }
-
-    function add_reprint_button() {
-        if (document.getElementById("npp-reprint-btn")) return;
-
-        const btn = document.createElement("button");
-        btn.id = "npp-reprint-btn";
-        btn.type = "button";
-        btn.className = "btn btn-secondary";
-        btn.innerHTML = `<i class="fa fa-history" style="margin-right:6px"></i> Reprint Last Invoice`;
-        btn.onclick = async () => {
-            try {
-                const res = await frappe.db.get_list('POS Invoice', {
-                    fields: ['name'],
-                    filters: { docstatus: 1 },
-                    order_by: 'creation desc',
-                    limit: 1
-                });
-                if (!res || res.length === 0) {
-                    frappe.msgprint("No submitted POS invoices found");
-                    return;
-                }
-                await printInvoiceWithQZ(res[0].name);
-            } catch (err) {
-                frappe.msgprint("Error fetching last invoice: " + err);
-            }
-        };
-
-        for (const sel of TOOLBAR_SELECTORS) {
-            const host = document.querySelector(sel);
-            if (host) { host.prepend(btn); return; }
-        }
-    }
-
-
 
     function wait_for_toolbar_then_mount() {
         const mo = new MutationObserver((_m, obs) => {
@@ -322,7 +273,7 @@
             for (const sel of TOOLBAR_SELECTORS) {
                 if (document.querySelector(sel)) {
                     obs.disconnect();
-                    add_reprint_button();
+                    add_invoice_buttons();
                     return;
                 }
             }
@@ -338,7 +289,6 @@
             setTimeout(watch_summary_btns, 300);
         }
     }
-
 
     on_pos_route();
     frappe.router && frappe.router.on("change", on_pos_route);

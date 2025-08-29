@@ -7,18 +7,40 @@
   "editable_grid": 0,
   "track_changes": 0,
   "fields": [
-        {
-            "fieldname": "default_printer",
-            "label": "Default Printer",
-            "fieldtype": "Data",
-            "reqd": 0
-        },
-        {
-            "fieldname": "enable_debug",
-            "label": "Enable Debug Logging",
-            "fieldtype": "Check"
-        }
-    ],
+      {
+        "fieldname": "printing_section",
+        "fieldtype": "Section Break",
+        "label": "Printing Settings"
+      },
+      {
+        "fieldname": "default_printer",
+        "label": "Default Printer",
+        "fieldtype": "Data"
+      },
+      {
+        "fieldname": "printer_mappings",
+        "label": "Printer Mappings",
+        "fieldtype": "Table",
+        "options": "NextPOS Printer Mapping"
+      },
+      {
+        "fieldname": "logging_section",
+        "fieldtype": "Section Break",
+        "label": "Debug / Logging"
+      },
+      {
+        "fieldname": "enable_debug",
+        "label": "Enable Debug Logging",
+        "fieldtype": "Check"
+      },
+      {
+        "fieldname": "log_level",
+        "label": "Log Level",
+        "fieldtype": "Select",
+        "options": "\nINFO\nWARNING\nERROR\nDEBUG",
+        "default": "INFO"
+      }
+  ],
 
   "permissions": [
     {
