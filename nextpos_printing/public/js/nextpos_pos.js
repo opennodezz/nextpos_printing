@@ -159,24 +159,73 @@
     window.printInvoiceWithQZ = async function (invoiceName) {
         await ensureQZ();
 
+        // Current POS Profile
         let posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
-        let printerConfig = await getPrinterForProfile(posProfile);
 
-        let printer = (printerConfig && printerConfig.printer) || await getPrinterOrPrompt();
-        let autoCut = !!(printerConfig && parseInt(printerConfig.auto_cut) === 1);
+        // Fetch printer + settings from backend
+        let res = await frappe.call({
+            method: "nextpos_printing.utils.settings.get_printer_for_pos",
+            args: { pos_profile: posProfile }
+        });
 
-        // Send cut flag to backend
+        if (!res || !res.message) {
+            frappe.msgprint("No printer configuration found. Please check NextPOS Settings.");
+            return;
+        }
+
+        let { printer, cut_mode, feed_before_cut, print_copies } = res.message;
+
+        // Validate printer with QZ
+        let printers = await qz.printers.find();
+        if (!printers.includes(printer)) {
+            frappe.msgprint(`Configured printer "${printer}" not found. Using first available printer.`);
+            printer = printers[0];
+        }
+
+        // Get print payload from backend
         const resp = await fetch(
-            `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}&cut=${autoCut ? 1 : 0}`
+            `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}`
         ).then(r => r.json());
 
         let data = resp.message;
+        if (!Array.isArray(data)) {
+            data = [data];
+        }
+
+        // Add cut/feeding (same logic as before)
+        if (cut_mode && cut_mode !== "None") {
+            let cutCommand = {
+                type: "raw",
+                format: "command",
+                data: ""
+            };
+
+            if (feed_before_cut && feed_before_cut > 0) {
+                cutCommand.data += `\x1B\x64${String.fromCharCode(feed_before_cut)}`;
+            }
+
+            if (cut_mode === "Full Cut") {
+                cutCommand.data += "\x1D\x56\x00";
+            } else if (cut_mode === "Partial Cut") {
+                cutCommand.data += "\x1D\x56\x01";
+            }
+
+            data.push(cutCommand);
+        }
+
+        // Create config
         const cfg = qz.configs.create(printer);
 
-        return qz.print(cfg, data)
-            .then(() => console.log(`Printed to ${printer} (autoCut=${autoCut})`))
-            .catch(err => console.error("Print failed", err));
+        // --- NEW: loop for multiple copies ---
+        let copies = parseInt(print_copies) || 1;
+        for (let i = 0; i < copies; i++) {
+            await qz.print(cfg, data)
+                .then(() => console.log(`Printed copy ${i + 1}/${copies} to ${printer}`))
+                .catch(err => console.error("Print failed", err));
+        }
     };
+
+
 
     function add_invoice_buttons() {
         for (const sel of TOOLBAR_SELECTORS) {

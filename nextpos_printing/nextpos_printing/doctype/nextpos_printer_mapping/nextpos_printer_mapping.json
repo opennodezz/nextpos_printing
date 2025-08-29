@@ -20,12 +20,6 @@
       "fieldtype": "Data",
       "reqd": 1,
       "in_list_view": 1
-    },
-    {
-      "fieldname": "auto_cut",
-      "label": "Enable Auto-Cut",
-      "fieldtype": "Check",
-      "in_list_view": 1
     }
   ]
 }

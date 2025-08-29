@@ -7,39 +7,152 @@
   "editable_grid": 0,
   "track_changes": 0,
   "fields": [
-      {
-        "fieldname": "printing_section",
-        "fieldtype": "Section Break",
-        "label": "Printing Settings"
-      },
-      {
-        "fieldname": "default_printer",
-        "label": "Default Printer",
-        "fieldtype": "Data"
-      },
-      {
-        "fieldname": "printer_mappings",
-        "label": "Printer Mappings",
-        "fieldtype": "Table",
-        "options": "NextPOS Printer Mapping"
-      },
-      {
-        "fieldname": "logging_section",
-        "fieldtype": "Section Break",
-        "label": "Debug / Logging"
-      },
-      {
-        "fieldname": "enable_debug",
-        "label": "Enable Debug Logging",
-        "fieldtype": "Check"
-      },
-      {
-        "fieldname": "log_level",
-        "label": "Log Level",
-        "fieldtype": "Select",
-        "options": "\nINFO\nWARNING\nERROR\nDEBUG",
-        "default": "INFO"
-      }
+
+    {
+      "fieldname": "printing_section",
+      "fieldtype": "Section Break",
+      "label": "Printing Settings"
+    },
+    {
+      "fieldname": "default_printer",
+      "label": "Default Printer",
+      "fieldtype": "Data",
+      "description": "Name of the default printer (exact name as in system)."
+    },
+    {
+      "fieldname": "enable_auto_print",
+      "label": "Enable Printing by Default",
+      "fieldtype": "Check",
+      "default": "1"
+    },
+    {
+      "fieldname": "print_copies",
+      "label": "Number of Copies",
+      "fieldtype": "Int",
+      "default": "1"
+    },
+    {
+      "fieldname": "paper_width",
+      "label": "Paper Width (characters per line)",
+      "fieldtype": "Select",
+      "options": "\n42\n48\n80",
+      "default": "42"
+    },
+
+    {
+      "fieldname": "printer_mapping_section",
+      "fieldtype": "Section Break",
+      "label": "Printer Mappings"
+    },
+    {
+      "fieldname": "printer_mappings",
+      "label": "Printer Mappings",
+      "fieldtype": "Table",
+      "options": "NextPOS Printer Mapping"
+    },
+
+    {
+      "fieldname": "layout_section",
+      "fieldtype": "Section Break",
+      "label": "Receipt Layout"
+    },
+    {
+      "fieldname": "show_logo",
+      "label": "Show Company Logo",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "logo_width",
+      "label": "Company Logo Width (%)",
+      "fieldtype": "Int",
+      "depends_on": "eval:doc.show_logo"
+    },
+    {
+      "fieldname": "show_address",
+      "label": "Show Company Address / Phone",
+      "fieldtype": "Check",
+      "default": "1"
+    },
+    {
+      "fieldname": "show_tax",
+      "label": "Show Tax Details",
+      "fieldtype": "Check",
+      "default": "1"
+    },
+    {
+      "fieldname": "show_item_code",
+      "label": "Show Item Code / Barcode",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "show_cashier",
+      "label": "Show Cashier Name",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "custom_footer",
+      "label": "Custom Footer Text",
+      "fieldtype": "Small Text"
+    },
+
+    {
+      "fieldname": "control_section",
+      "fieldtype": "Section Break",
+      "label": "Printer Control"
+    },
+    {
+      "fieldname": "cut_mode",
+      "label": "Cut Mode",
+      "fieldtype": "Select",
+      "options": "\nNone\nFull Cut\nPartial Cut",
+      "default": "Full Cut"
+    },
+    {
+      "fieldname": "feed_before_cut",
+      "label": "Feed Lines Before Cut",
+      "fieldtype": "Int",
+      "default": "5"
+    },
+    {
+      "fieldname": "open_cash_drawer",
+      "label": "Open Cash Drawer After Print",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "drawer_pin",
+      "label": "Cash Drawer Pin",
+      "fieldtype": "Int",
+      "description": "Depends on printer port, usually 2 or 3."
+    },
+
+    {
+      "fieldname": "advanced_section",
+      "fieldtype": "Section Break",
+      "label": "Advanced"
+    },
+    {
+      "fieldname": "encoding_type",
+      "label": "Encoding Type",
+      "fieldtype": "Select",
+      "options": "\nUTF-8\nCP437\nCP850",
+      "default": "UTF-8"
+    },
+    {
+      "fieldname": "wrap_long_names",
+      "label": "Wrap Long Item Names",
+      "fieldtype": "Check",
+      "default": "1"
+    },
+    {
+      "fieldname": "test_print",
+      "label": "Print Test Receipt",
+      "fieldtype": "Button"
+    },
+    {
+      "fieldname": "debug_raw",
+      "label": "Debug Raw Output",
+      "fieldtype": "Check"
+    }
   ],
 
   "permissions": [

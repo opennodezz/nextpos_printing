@@ -16,7 +16,7 @@ def wrap_text(text: str, width: int = PRINTER_WIDTH):
         lines.append(text)
     return lines
 
-def render_invoice(invoice_name: str, cut: bool = True):
+def render_invoice(invoice_name: str):
     invoice = frappe.get_doc("POS Invoice", invoice_name)
 
     lines = []
@@ -65,8 +65,8 @@ def render_invoice(invoice_name: str, cut: bool = True):
     lines.append("\n\n\n")
 
     payload = "\n".join(lines)
-    if cut:
-        payload += FEED_BEFORE_CUT + CUT_FULL
+    # if cut:
+    #     payload += FEED_BEFORE_CUT + CUT_FULL
 
     return [{
         "type": "raw",
