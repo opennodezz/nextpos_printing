@@ -1,5 +1,4 @@
 // nextpos_printing/public/js/nextpos_pos.js
-
 (function () {
     const TOOLBAR_SELECTORS = [
         ".pos-bill-toolbar",
@@ -38,72 +37,6 @@
                 `
             });
             throw e;
-        }
-    }
-
-    // --- SETTINGS-DRIVEN PRINTER LOOKUP ---
-    async function getPrinterForProfile(posProfile) {
-        try {
-            const res = await frappe.call({
-                method: "nextpos_printing.utils.settings.get_printer_for_pos",
-                args: { pos_profile: posProfile }
-            });
-
-            if (!res.message) return null;
-
-            const mapping = res.message;
-            const printers = await qz.printers.find();
-
-            if (printers.includes(mapping.printer)) {
-                return { printer: mapping.printer, auto_cut: mapping.auto_cut };
-            } else {
-                frappe.msgprint(
-                    `Configured printer "${mapping.printer}" not found. Using Default Printer.`
-                );
-                return {
-                    printer: mapping.default_printer || printers[0],
-                    auto_cut: mapping.auto_cut
-                };
-            }
-        } catch (err) {
-            console.error("[nextpos_printing] Failed to fetch printer mapping:", err);
-            return null;
-        }
-    }
-
-    // Prompt user if no mapping/default printer is available
-    async function getPrinterOrPrompt() {
-        try {
-            return await qz.printers.getDefault();
-        } catch {
-            console.warn("[nextpos_printing] Default printer not found, prompting...");
-            const printers = await qz.printers.find();
-
-            if (!printers || !printers.length) {
-                frappe.msgprint({
-                    title: "No Printers Found",
-                    indicator: "red",
-                    message: "QZ Tray is running but no printers were detected."
-                });
-                throw new Error("No printers available");
-            }
-
-            let options = printers.map(p => `<option value="${p}">${p}</option>`).join("");
-            let selectHtml = `<select id="printer-picker" style="width:100%">${options}</select>`;
-
-            return new Promise((resolve) => {
-                const d = new frappe.ui.Dialog({
-                    title: "Select Printer",
-                    fields: [{ fieldtype: "HTML", fieldname: "printer_list", options: selectHtml }],
-                    primary_action_label: "Select",
-                    primary_action: () => {
-                        const chosen = d.$wrapper.find("#printer-picker").val();
-                        d.hide();
-                        resolve(chosen);
-                    }
-                });
-                d.show();
-            });
         }
     }
 
@@ -156,13 +89,11 @@
         });
     }
 
-    window.printInvoiceWithQZ = async function (invoiceName) {
+    window.printInvoiceWithQZ = async function (invoiceName, openDrawerFlag = false) {
         await ensureQZ();
 
-        // Current POS Profile
         let posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
 
-        // Fetch printer + settings from backend
         let res = await frappe.call({
             method: "nextpos_printing.utils.settings.get_printer_for_pos",
             args: { pos_profile: posProfile }
@@ -173,72 +104,76 @@
             return;
         }
 
-        let { printer, cut_mode, feed_before_cut, print_copies } = res.message;
+        let { printer, cut_mode, feed_before_cut, print_copies, open_cash_drawer, drawer_pin } = res.message;
 
-        // Validate printer with QZ
         let printers = await qz.printers.find();
         if (!printers.includes(printer)) {
             frappe.msgprint(`Configured printer "${printer}" not found. Using first available printer.`);
             printer = printers[0];
         }
 
-        // Get print payload from backend
         const resp = await fetch(
             `/api/method/nextpos_printing.api.print.get_print_payload?pos_invoice_name=${invoiceName}`
         ).then(r => r.json());
 
         let data = resp.message;
-        if (!Array.isArray(data)) {
-            data = [data];
+        if (!Array.isArray(data)) data = [data];
+
+        // --- Cut logic ---
+        if (cut_mode && cut_mode !== "None") {
+            let cutCommand = { type: "raw", format: "hex", data: "" };
+
+            if (feed_before_cut && parseInt(feed_before_cut) > 0) {
+                const n = parseInt(feed_before_cut);
+                cutCommand.data += "1B64" + n.toString(16).padStart(2, "0");
+            }
+
+            if (cut_mode === "Full Cut") cutCommand.data += "1D5600";
+            else if (cut_mode === "Partial Cut") cutCommand.data += "1D5601";
+
+            data.push(cutCommand);
         }
 
-    if (cut_mode && cut_mode !== "None") {
-        let cutCommand = {
-            type: "raw",
-            format: "hex",
-            data: ""
-        };
-
-        // Feed lines before cut
-        if (feed_before_cut && parseInt(feed_before_cut) > 0) {
-            const n = parseInt(feed_before_cut);
-            // ESC d n (feed n lines)
-            cutCommand.data += "1B64" + n.toString(16).padStart(2, "0");
-        }
-
-        // Add cut command
-        if (cut_mode === "Full Cut") {
-            cutCommand.data += "1D5600"; // GS V 0
-        } else if (cut_mode === "Partial Cut") {
-            cutCommand.data += "1D5601"; // GS V 1
-        }
-
-        data.push(cutCommand);
-    }
-
-
-        // Create config
         const cfg = qz.configs.create(printer);
-
-        // --- NEW: loop for multiple copies ---
         let copies = parseInt(print_copies) || 1;
+
+        // After printing all copies
         for (let i = 0; i < copies; i++) {
             await qz.print(cfg, data)
                 .then(() => console.log(`Printed copy ${i + 1}/${copies} to ${printer}`))
                 .catch(err => console.error("Print failed", err));
         }
+
+        if (openDrawerFlag && open_cash_drawer) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay
+            let pin = parseInt(drawer_pin);
+            if (isNaN(pin)) pin = 0;
+            let t1 = 50, t2 = 50;
+            let drawerCommand = {
+                type: "raw",
+                format: "hex",
+                data:
+                    "1B70" +
+                    pin.toString(16).padStart(2, "0") +
+                    t1.toString(16).padStart(2, "0") +
+                    t2.toString(16).padStart(2, "0")
+            };
+
+            console.log("[nextpos_printing] Drawer command fired:", drawerCommand.data);
+            await qz.print(cfg, [drawerCommand])
+                .then(() => console.log("Drawer opened after print"))
+                .catch(err => console.error("Drawer open failed", err));
+        }
     };
 
-
-
+    // --- BUTTONS ---
     function add_invoice_buttons() {
         for (const sel of TOOLBAR_SELECTORS) {
             const actions = document.querySelector(sel);
             if (!actions) continue;
 
-            if (document.getElementById("npp-print-current-btn")) return; // prevent duplicates
+            if (document.getElementById("npp-print-current-btn")) return;
 
-            // Print Current
             const currentBtn = document.createElement("button");
             currentBtn.id = "npp-print-current-btn";
             currentBtn.className = "btn btn-primary";
@@ -249,10 +184,9 @@
                     frappe.msgprint("No POS Invoice is currently open");
                     return;
                 }
-                await printInvoiceWithQZ(invoice.name);
+                await printInvoiceWithQZ(invoice.name, false);
             };
 
-            // Reprint Last
             const lastBtn = document.createElement("button");
             lastBtn.id = "npp-reprint-last-btn";
             lastBtn.className = "btn btn-secondary";
@@ -270,12 +204,20 @@
                         frappe.msgprint("No submitted POS invoices found");
                         return;
                     }
-                    await printInvoiceWithQZ(res[0].name);
+                    await printInvoiceWithQZ(res[0].name, false);
                 } catch (err) {
                     frappe.msgprint("Error fetching last invoice: " + err);
                 }
             };
 
+            const drawerBtn = document.createElement("button");
+            drawerBtn.id = "npp-open-drawer-btn";
+            drawerBtn.className = "btn btn-warning";
+            drawerBtn.style.marginLeft = "6px";
+            drawerBtn.innerHTML = `<i class="fa fa-cash-register" style="margin-right:6px"></i> Open Drawer`;
+            drawerBtn.onclick = window.open_drawer;
+
+            actions.prepend(drawerBtn);
             actions.prepend(lastBtn);
             actions.prepend(currentBtn);
             console.log("[nextpos_printing] Added NPP buttons to", sel);
@@ -283,8 +225,42 @@
         }
     }
 
+    window.open_drawer = async () => {
+        try {
+            await ensureQZ();
+            const posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
+            const mappingRes = await frappe.call({
+                method: "nextpos_printing.utils.settings.get_printer_for_pos",
+                args: { pos_profile: posProfile }
+            });
 
+            if (mappingRes.message && mappingRes.message.printer) {
+                let pin = parseInt(mappingRes.message.drawer_pin) || 0;
+                let t1 = 50, t2 = 50;
+                let drawerCommand = {
+                    type: "raw",
+                    format: "hex",
+                    data:
+                        "1B70" +
+                        pin.toString(16).padStart(2, "0") +
+                        t1.toString(16).padStart(2, "0") +
+                        t2.toString(16).padStart(2, "0")
+                };
 
+                console.log("[nextpos_printing] Manual Open Drawer:", drawerCommand.data);
+
+                const cfg = qz.configs.create(mappingRes.message.printer);
+                await qz.print(cfg, [drawerCommand]);
+                frappe.show_alert({ message: "Cash drawer opened", indicator: "green" });
+            } else {
+                frappe.msgprint("No printer mapping found for this POS Profile.");
+            }
+        } catch (err) {
+            frappe.msgprint("Failed to open drawer: " + err);
+        }
+    };
+
+    // --- Replace ERPNext buttons ---
     function replace_print_receipt_button() {
         const host = document.querySelector(".summary-btns");
         if (!host) return;
@@ -335,11 +311,35 @@
         setTimeout(() => mo.disconnect(), 5000);
     }
 
+    async function autoPrintIfEnabled(invoice) {
+        try {
+            const res = await frappe.call({
+                method: "frappe.client.get",
+                args: { doctype: "NextPOS Settings", name: "NextPOS Settings" }
+            });
+
+            if (res.message && res.message.enable_auto_print) {
+                console.log("[nextpos_printing] Auto-print enabled, sending invoice", invoice.name);
+                await printInvoiceWithQZ(invoice.name, true);
+            }
+        } catch (err) {
+            console.error("[nextpos_printing] Auto-print check failed:", err);
+        }
+    }
+
     function on_pos_route() {
         const route = frappe.get_route_str && frappe.get_route_str();
         if (route === "point-of-sale") {
             setTimeout(wait_for_toolbar_then_mount, 300);
             setTimeout(watch_summary_btns, 300);
+
+            frappe.ui.form.on("POS Invoice", {
+                after_save: function (frm) {
+                    if (frm.doc.docstatus === 1) {
+                        autoPrintIfEnabled(frm.doc);
+                    }
+                }
+            });
         }
     }
 

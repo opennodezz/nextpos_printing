@@ -19,6 +19,9 @@ def wrap_text(text: str, width: int = PRINTER_WIDTH):
 def render_invoice(invoice_name: str):
     invoice = frappe.get_doc("POS Invoice", invoice_name)
     settings = frappe.get_single("NextPOS Settings")
+    settings = frappe.get_single("NextPOS Settings")
+    width = int(settings.paper_width or 42)
+
 
     lines = []
 
@@ -29,7 +32,7 @@ def render_invoice(invoice_name: str):
         lines.append("**** FINAL RECEIPT ****")
 
     # Company name (centered)
-    company = (invoice.company or "My Shop").center(PRINTER_WIDTH)
+    company = (invoice.company or "My Shop").center(width)
     lines.append(company)
 
     # Address/phone
@@ -61,13 +64,13 @@ def render_invoice(invoice_name: str):
 
 
 
-    lines.append("-" * PRINTER_WIDTH)
+    lines.append("-" * width)
 
     # --- Items ---
     for item in invoice.items:
         # Wrap item name if enabled
         if settings.wrap_long_names:
-            for wrapped in wrap_text(item.item_name, PRINTER_WIDTH):
+            for wrapped in wrap_text(item.item_name, width):
                 lines.append(wrapped)
         else:
             lines.append(item.item_name)
@@ -78,42 +81,42 @@ def render_invoice(invoice_name: str):
         # Qty x Rate → Amount
         qty_rate = f"{item.qty:.0f} x {item.rate:.2f}"
         amt = f"{item.amount:.2f}"
-        line = qty_rate.ljust(PRINTER_WIDTH - len(amt)) + amt
+        line = qty_rate.ljust(width - len(amt)) + amt
         lines.append(line)
 
-    lines.append("-" * PRINTER_WIDTH)
+    lines.append("-" * width)
 
     # --- Taxes ---
     if settings.show_tax:
         for tax in getattr(invoice, "taxes", []):
             tax_name = tax.description[:25]
             amt = f"{tax.tax_amount:.2f}"
-            line = tax_name.ljust(PRINTER_WIDTH - len(amt)) + amt
+            line = tax_name.ljust(width - len(amt)) + amt
             lines.append(line)
 
     # --- Totals ---
-    lines.append("=" * PRINTER_WIDTH)
+    lines.append("=" * width)
     total = f"{invoice.grand_total:.2f}"
-    lines.append("TOTAL".ljust(PRINTER_WIDTH - len(total)) + total)
+    lines.append("TOTAL".ljust(width - len(total)) + total)
 
     paid = f"{getattr(invoice, 'paid_amount', 0.00):.2f}"
-    lines.append("Paid".ljust(PRINTER_WIDTH - len(paid)) + paid)
+    lines.append("Paid".ljust(width - len(paid)) + paid)
 
     change = f"{getattr(invoice, 'change_amount', 0.00):.2f}"
-    lines.append("Change".ljust(PRINTER_WIDTH - len(change)) + change)
-    lines.append("=" * PRINTER_WIDTH)
+    lines.append("Change".ljust(width - len(change)) + change)
+    lines.append("=" * width)
 
     # --- Cashier ---
     if settings.show_cashier and getattr(invoice, "owner", None):
         user = frappe.get_doc("User", invoice.owner)
         cashier_name = user.full_name or user.username or invoice.owner
         lines.append(f"Cashier: {cashier_name}")
-        lines.append("-" * PRINTER_WIDTH)
+        lines.append("-" * width)
 
     # --- Footer ---
     if settings.custom_footer:
-        for wrapped in wrap_text(settings.custom_footer, PRINTER_WIDTH):
-            lines.append(wrapped.center(PRINTER_WIDTH))
+        for wrapped in wrap_text(settings.custom_footer, width):
+            lines.append(wrapped.center(width))
 
     lines.append("\n\n\n")
 
