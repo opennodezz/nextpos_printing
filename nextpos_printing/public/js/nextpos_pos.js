@@ -119,23 +119,35 @@
         let data = resp.message;
         if (!Array.isArray(data)) data = [data];
 
-        // --- Cut logic ---
         if (cut_mode && cut_mode !== "None") {
-            let cutCommand = { type: "raw", format: "hex", data: "" };
+            let cutData = "";
 
+            // Feed lines before cut
             if (feed_before_cut && parseInt(feed_before_cut) > 0) {
                 const n = parseInt(feed_before_cut);
-                cutCommand.data += "1B64" + n.toString(16).padStart(2, "0");
+                cutData += "\x1Bd" + String.fromCharCode(n);
             }
 
-            if (cut_mode === "Full Cut") cutCommand.data += "1D5600";
-            else if (cut_mode === "Partial Cut") cutCommand.data += "1D5601";
+            if (cut_mode === "Full Cut") {
+                cutData += "\x1DV\x00";
+            } else if (cut_mode === "Partial Cut") {
+                cutData += "\x1DV\x01";
+            }
+
+            let cutCommand = {
+                type: "raw",
+                data: cutData
+            };
 
             data.push(cutCommand);
         }
 
+
         const cfg = qz.configs.create(printer);
         let copies = parseInt(print_copies) || 1;
+
+        //temp logs
+        //console.log("FINAL PAYLOAD:", JSON.stringify(data, null, 2));
 
         // After printing all copies
         for (let i = 0; i < copies; i++) {

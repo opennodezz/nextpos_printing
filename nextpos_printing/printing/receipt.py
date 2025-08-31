@@ -1,10 +1,11 @@
 import frappe
-import os
-from frappe.utils.jinja import render_template
+import re, base64
+from frappe.utils.file_manager import get_file_path
 
 CUT_FULL = '\x1D\x56\x00'   # GS V 0
 PRINTER_WIDTH = 42  # characters per line
 FEED_BEFORE_CUT = '\x1B\x64\x05'  # ESC d n = feed 5 lines
+
 
 def wrap_text(text: str, width: int = PRINTER_WIDTH):
     """Wrap text to fit thermal printer width."""
@@ -16,59 +17,84 @@ def wrap_text(text: str, width: int = PRINTER_WIDTH):
         lines.append(text)
     return lines
 
+
+def html_to_escpos(html_text: str) -> str:
+    """Convert limited HTML from Text Editor into ESC/POS-friendly text."""
+    text = html_text or ""
+
+    # line breaks
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</?p>", "\n", text, flags=re.I)
+
+    # bold
+    text = re.sub(r"<b>|<strong>", "\x1B\x45\x01", text, flags=re.I)
+    text = re.sub(r"</b>|</strong>", "\x1B\x45\x00", text, flags=re.I)
+
+    # center
+    text = re.sub(r"<center>", "\x1B\x61\x01", text, flags=re.I)
+    text = re.sub(r"</center>", "\x1B\x61\x00", text, flags=re.I)
+
+    # strip anything else
+    text = frappe.utils.strip_html_tags(text)
+    return text
+
+
+import frappe
+import re, base64
+from frappe.utils.file_manager import get_file_path
+
+PRINTER_WIDTH = 42  # characters per line
+
+
+def wrap_text(text: str, width: int = PRINTER_WIDTH):
+    """Wrap text to fit thermal printer width."""
+    lines = []
+    while len(text) > width:
+        lines.append(text[:width])
+        text = text[width:]
+    if text:
+        lines.append(text)
+    return lines
+
+
+def html_to_escpos(html_text: str) -> str:
+    """Convert limited HTML into ESC/POS-friendly text."""
+    text = html_text or ""
+
+    # line breaks
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"</?p>", "\n", text, flags=re.I)
+
+    # bold
+    text = re.sub(r"<b>|<strong>", "\x1BE\x01", text, flags=re.I)
+    text = re.sub(r"</b>|</strong>", "\x1BE\x00", text, flags=re.I)
+
+    # center
+    text = re.sub(r"<center>", "\x1Ba\x01", text, flags=re.I)
+    text = re.sub(r"</center>", "\x1Ba\x00", text, flags=re.I)
+
+    # strip any other html
+    text = frappe.utils.strip_html_tags(text)
+    return text
+
+
 def render_invoice(invoice_name: str):
     invoice = frappe.get_doc("POS Invoice", invoice_name)
     settings = frappe.get_single("NextPOS Settings")
-    settings = frappe.get_single("NextPOS Settings")
-    width = int(settings.paper_width or 42)
-
+    width = int(settings.paper_width or PRINTER_WIDTH)
 
     lines = []
 
-    # --- Header ---
-    if invoice.docstatus == 0:
-        lines.append("**** DRAFT RECEIPT ****")
-    elif invoice.docstatus == 1:
-        lines.append("**** FINAL RECEIPT ****")
-
-    # Company name (centered)
-    company = (invoice.company or "My Shop").center(width)
-    lines.append(company)
-
-    # Address/phone
-    if settings.show_address and invoice.company:
-        # First, try to fetch the primary address linked to the company
-        addr = frappe.get_all(
-            "Address",
-            filters={
-                "link_doctype": "Company",
-                "link_name": invoice.company,
-                "is_primary_address": 1
-            },
-            fields=["address_line1", "city", "phone"],
-            limit=1
-        )
-        if addr:
-            if addr[0].get("address_line1"):
-                lines.append(addr[0].address_line1)
-            if addr[0].get("city"):
-                lines.append(addr[0].city)
-            if addr[0].get("phone"):
-                lines.append(f"Tel: {addr[0].phone}")
-        else:
-            # Fallback to Company phone number
-            company = frappe.get_doc("Company", invoice.company)
-            lines.append(f"Tel: {company.phone_no}")
-            # if getattr(company, "phone_no", None):
-            #     lines.append(f"Tel: {company.phone_no}")
-
-
+    # --- Custom Header ---
+    if settings.receipt_header:
+        header_text = html_to_escpos(settings.receipt_header)
+        for wrapped in wrap_text(header_text, width):
+            lines.append(wrapped)
 
     lines.append("-" * width)
 
     # --- Items ---
     for item in invoice.items:
-        # Wrap item name if enabled
         if settings.wrap_long_names:
             for wrapped in wrap_text(item.item_name, width):
                 lines.append(wrapped)
@@ -78,7 +104,6 @@ def render_invoice(invoice_name: str):
         if settings.show_item_code:
             lines.append(f"  [{item.item_code}]")
 
-        # Qty x Rate → Amount
         qty_rate = f"{item.qty:.0f} x {item.rate:.2f}"
         amt = f"{item.amount:.2f}"
         line = qty_rate.ljust(width - len(amt)) + amt
@@ -114,16 +139,29 @@ def render_invoice(invoice_name: str):
         lines.append("-" * width)
 
     # --- Footer ---
-    if settings.custom_footer:
+    if settings.receipt_footer:
+        footer_text = html_to_escpos(settings.receipt_footer)
+        for wrapped in wrap_text(footer_text, width):
+            lines.append(wrapped)
+    elif settings.custom_footer:
         for wrapped in wrap_text(settings.custom_footer, width):
             lines.append(wrapped.center(width))
 
+    # --- Receipt Type ---
+    if invoice.docstatus == 0:
+        lines.append("**** DRAFT RECEIPT ****".center(width))
+    elif invoice.docstatus == 1:
+        lines.append("**** FINAL RECEIPT ****".center(width))
+
     lines.append("\n\n\n")
 
-    payload = "\n".join(lines)
+    # --- Build Payload ---
+    payload = []
 
-    return [{
+    # Then receipt text block
+    payload.append({
         "type": "raw",
-        "format": "command",
-        "data": payload
-    }]
+        "data": "\n".join(lines)
+    })
+
+    return payload

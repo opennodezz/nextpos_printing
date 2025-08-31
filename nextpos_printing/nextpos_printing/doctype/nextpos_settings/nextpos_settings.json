@@ -51,21 +51,18 @@
       "options": "NextPOS Printer Mapping"
     },
 
+
     {
-      "fieldname": "layout_section",
-      "fieldtype": "Section Break",
-      "label": "Receipt Layout"
+    "fieldname": "layout_section",
+    "fieldtype": "Section Break",
+    "label": "Receipt Layout"
     },
+    
     {
-      "fieldname": "show_logo",
-      "label": "Show Company Logo",
-      "fieldtype": "Check"
-    },
-    {
-      "fieldname": "logo_width",
-      "label": "Company Logo Width (%)",
-      "fieldtype": "Int",
-      "depends_on": "eval:doc.show_logo"
+      "fieldname": "receipt_header",
+      "label": "Custom Header Text",
+      "fieldtype": "Text Editor",
+      "description": "Add store name, tagline, address, or any formatted text to appear at the top of the receipt."
     },
     {
       "fieldname": "show_address",
@@ -90,10 +87,12 @@
       "fieldtype": "Check"
     },
     {
-      "fieldname": "custom_footer",
+      "fieldname": "receipt_footer",
       "label": "Custom Footer Text",
-      "fieldtype": "Small Text"
+      "fieldtype": "Text Editor",
+      "description": "Add promo messages, disclaimers, or thank-you notes to appear at the bottom."
     },
+
 
     {
       "fieldname": "control_section",
