@@ -1,0 +1,43 @@
+/* Shared sidebar container */
+.npp-sidebar {
+    position: fixed;        /* fix to the viewport, not inside POS */
+    top: 80px;              /* below the header */
+    bottom: 20px;           /* leave some space at bottom */
+    width: 90px;            /* slim but enough for big buttons */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 10px;
+    background: transparent; /* no opaque background, let POS show */
+    z-index: 9999;          /* float above POS */
+    pointer-events: auto;   /* make buttons clickable */
+}
+
+/* Left and Right positions */
+.npp-left { left: 10px; }
+.npp-right { right: 10px; }
+
+/* Big square icon buttons */
+.npp-btn {
+    width: 70px;
+    height: 70px;
+    font-size: 1.8rem;
+    border-radius: 12px;
+    border: 2px solid #ddd;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: background 0.2s;
+}
+
+.npp-btn:hover {
+    background: #f2f2f2;
+    cursor: pointer;
+}
+
+/* Icons centered */
+.npp-btn i {
+    margin: 0 !important;
+}

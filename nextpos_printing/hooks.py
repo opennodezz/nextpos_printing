@@ -14,6 +14,9 @@ page_js = {
         ]
 }
 
+app_include_css = ["/assets/nextpos_printing/css/nextpos__printing_custom.css"]
+
+
 
 #--------------------------------------------NextPOS Printing app additions end
 
