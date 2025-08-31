@@ -1,47 +1,5 @@
 import frappe
-import re, base64
-from frappe.utils.file_manager import get_file_path
-
-CUT_FULL = '\x1D\x56\x00'   # GS V 0
-PRINTER_WIDTH = 42  # characters per line
-FEED_BEFORE_CUT = '\x1B\x64\x05'  # ESC d n = feed 5 lines
-
-
-def wrap_text(text: str, width: int = PRINTER_WIDTH):
-    """Wrap text to fit thermal printer width."""
-    lines = []
-    while len(text) > width:
-        lines.append(text[:width])
-        text = text[width:]
-    if text:
-        lines.append(text)
-    return lines
-
-
-def html_to_escpos(html_text: str) -> str:
-    """Convert limited HTML from Text Editor into ESC/POS-friendly text."""
-    text = html_text or ""
-
-    # line breaks
-    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
-    text = re.sub(r"</?p>", "\n", text, flags=re.I)
-
-    # bold
-    text = re.sub(r"<b>|<strong>", "\x1B\x45\x01", text, flags=re.I)
-    text = re.sub(r"</b>|</strong>", "\x1B\x45\x00", text, flags=re.I)
-
-    # center
-    text = re.sub(r"<center>", "\x1B\x61\x01", text, flags=re.I)
-    text = re.sub(r"</center>", "\x1B\x61\x00", text, flags=re.I)
-
-    # strip anything else
-    text = frappe.utils.strip_html_tags(text)
-    return text
-
-
-import frappe
-import re, base64
-from frappe.utils.file_manager import get_file_path
+import re
 
 PRINTER_WIDTH = 42  # characters per line
 
@@ -57,25 +15,27 @@ def wrap_text(text: str, width: int = PRINTER_WIDTH):
     return lines
 
 
-def html_to_escpos(html_text: str) -> str:
-    """Convert limited HTML into ESC/POS-friendly text."""
-    text = html_text or ""
+def format_custom_block(text: str, width: int):
+    """Clean and center-align each line of custom header/footer text."""
+    if not text:
+        return []
 
-    # line breaks
-    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
-    text = re.sub(r"</?p>", "\n", text, flags=re.I)
+    # Replace HTML breaks and paragraphs with newlines
+    clean = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    clean = re.sub(r"</?p.*?>", "\n", clean, flags=re.I)
 
-    # bold
-    text = re.sub(r"<b>|<strong>", "\x1BE\x01", text, flags=re.I)
-    text = re.sub(r"</b>|</strong>", "\x1BE\x00", text, flags=re.I)
+    # Strip remaining HTML tags
+    clean = frappe.utils.strip_html_tags(clean or "")
 
-    # center
-    text = re.sub(r"<center>", "\x1Ba\x01", text, flags=re.I)
-    text = re.sub(r"</center>", "\x1Ba\x00", text, flags=re.I)
+    # Split into individual lines, trim spaces
+    lines = [ln.strip() for ln in clean.split("\n") if ln.strip()]
 
-    # strip any other html
-    text = frappe.utils.strip_html_tags(text)
-    return text
+    formatted = []
+    for ln in lines:
+        # Wrap long lines and center each piece
+        for wrapped in wrap_text(ln, width):
+            formatted.append(wrapped.center(width))
+    return formatted
 
 
 def render_invoice(invoice_name: str):
@@ -85,83 +45,93 @@ def render_invoice(invoice_name: str):
 
     lines = []
 
-    # --- Custom Header ---
+    # --- Store Info / Custom Header ---
     if settings.receipt_header:
-        header_text = html_to_escpos(settings.receipt_header)
-        for wrapped in wrap_text(header_text, width):
-            lines.append(wrapped)
-
+        header_lines = format_custom_block(settings.receipt_header, width)
+        if header_lines:
+            # First line = company name → Bold + Double Height
+            lines.append("\x1BE\x01\x1B!\x10" + header_lines[0].center(width) + "\x1BE\x00\x1B!\x00")
+            for ln in header_lines[1:]:
+                lines.append(ln.center(width))
+            lines.append("")
+            
     lines.append("-" * width)
 
-    # --- Items ---
+    # --- Item List ---
     for item in invoice.items:
-        if settings.wrap_long_names:
-            for wrapped in wrap_text(item.item_name, width):
-                lines.append(wrapped)
-        else:
-            lines.append(item.item_name)
-
-        if settings.show_item_code:
-            lines.append(f"  [{item.item_code}]")
-
-        qty_rate = f"{item.qty:.0f} x {item.rate:.2f}"
+        # Full line: Item name + amount at far right
         amt = f"{item.amount:.2f}"
-        line = qty_rate.ljust(width - len(amt)) + amt
-        lines.append(line)
+        name = item.item_name
 
-    lines.append("-" * width)
+        # First line = name (possibly wrapped), with amount on the first line if it fits
+        wrapped_name = wrap_text(name, width - len(amt) - 1)
+
+        if wrapped_name:
+            # Put first chunk with amount
+            first_line = wrapped_name[0].ljust(width - len(amt)) + amt
+            lines.append(first_line)
+
+            # Any extra chunks go below, indented for clarity
+            for extra in wrapped_name[1:]:
+                lines.append("  " + extra)
+
+        # Second line = qty × rate (aligned nicely)
+        qty_rate = f"{item.qty:.0f} x {item.rate:.2f}"
+        lines.append("   " + qty_rate)
+        lines.append("")
+
 
     # --- Taxes ---
-    if settings.show_tax:
-        for tax in getattr(invoice, "taxes", []):
-            tax_name = tax.description[:25]
+    if settings.show_tax and getattr(invoice, "taxes", []):
+        for tax in invoice.taxes:
+            tax_name = tax.description[:15]  # short label
             amt = f"{tax.tax_amount:.2f}"
-            line = tax_name.ljust(width - len(amt)) + amt
-            lines.append(line)
+            lines.append(tax_name.ljust(width - len(amt)) + amt)
+        lines.append("")
 
     # --- Totals ---
     lines.append("=" * width)
     total = f"{invoice.grand_total:.2f}"
-    lines.append("TOTAL".ljust(width - len(total)) + total)
+    lines.append("\x1BE\x01" + "TOTAL".ljust(width - len(total)) + total + "\x1BE\x00")
+    lines.append("=" * width)
+    lines.append("")
 
+    # --- Payment Summary ---
     paid = f"{getattr(invoice, 'paid_amount', 0.00):.2f}"
-    lines.append("Paid".ljust(width - len(paid)) + paid)
+    lines.append("Payment".ljust(width - len(paid)) + paid)
 
     change = f"{getattr(invoice, 'change_amount', 0.00):.2f}"
-    lines.append("Change".ljust(width - len(change)) + change)
-    lines.append("=" * width)
+    lines.append("Change Due".ljust(width - len(change)) + change)
+    lines.append("")
 
-    # --- Cashier ---
+    # --- Cashier / Metadata ---
     if settings.show_cashier and getattr(invoice, "owner", None):
         user = frappe.get_doc("User", invoice.owner)
         cashier_name = user.full_name or user.username or invoice.owner
         lines.append(f"Cashier: {cashier_name}")
-        lines.append("-" * width)
+
+    # Invoice ID (like Walmart reference #)
+    lines.append(f"Invoice: {invoice.name}")
+    lines.append(f"Date: {frappe.utils.format_datetime(invoice.posting_date, 'HH:mm dd-MM-YYYY')}")
+    lines.append("")
 
     # --- Footer ---
     if settings.receipt_footer:
-        footer_text = html_to_escpos(settings.receipt_footer)
-        for wrapped in wrap_text(footer_text, width):
-            lines.append(wrapped)
+        lines.extend(format_custom_block(settings.receipt_footer, width))
     elif settings.custom_footer:
-        for wrapped in wrap_text(settings.custom_footer, width):
-            lines.append(wrapped.center(width))
+        lines.extend(format_custom_block(settings.custom_footer, width))
 
+    lines.append("\n")  # extra feed
+    
     # --- Receipt Type ---
     if invoice.docstatus == 0:
-        lines.append("**** DRAFT RECEIPT ****".center(width))
+        lines.append(("**** DRAFT RECEIPT ****").center(width))
     elif invoice.docstatus == 1:
-        lines.append("**** FINAL RECEIPT ****".center(width))
+        lines.append(("**** FINAL RECEIPT ****").center(width))
 
-    lines.append("\n\n\n")
+    lines.append("\n\n\n")  # feed before cut
 
-    # --- Build Payload ---
-    payload = []
-
-    # Then receipt text block
-    payload.append({
+    return [{
         "type": "raw",
         "data": "\n".join(lines)
-    })
-
-    return payload
+    }]
