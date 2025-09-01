@@ -53,9 +53,9 @@
 
 
     {
-    "fieldname": "layout_section",
-    "fieldtype": "Section Break",
-    "label": "Receipt Layout"
+      "fieldname": "layout_section",
+      "fieldtype": "Section Break",
+      "label": "Receipt Layout"
     },
     
     {
@@ -123,11 +123,18 @@
       "fieldtype": "Int",
       "description": "Depends on printer port, usually 2 or 3."
     },
+    {
+      "fieldname": "test_drawer",
+      "label": "Test Drawer",
+      "fieldtype": "Button"
+    },
 
     {
       "fieldname": "advanced_section",
       "fieldtype": "Section Break",
-      "label": "Advanced"
+      "label": "Advanced",
+      "collapsible": 1,
+      "collapsible_depends_on": ""
     },
     {
       "fieldname": "encoding_type",
@@ -151,6 +158,17 @@
       "fieldname": "debug_raw",
       "label": "Debug Raw Output",
       "fieldtype": "Check"
+    },
+
+    {
+      "fieldname": "setup_section",
+      "fieldtype": "Section Break",
+      "label": "Setup"
+    },
+    {
+      "fieldname": "run_setup_wizard",
+      "label": "Run Setup Wizard",
+      "fieldtype": "Button"
     }
   ],
 
