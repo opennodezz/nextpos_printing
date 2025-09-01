@@ -1,12 +1,5 @@
 // nextpos_printing/public/js/nextpos_pos.js
 (function () {
-    const TOOLBAR_SELECTORS = [
-        ".pos-bill-toolbar",
-        ".pos-actions",
-        ".page-head .page-actions",
-        "header .actions",
-    ];
-
     // --- QZ CONNECTION HANDLING ---
     async function ensureQZ() {
         if (!window.qz) {
@@ -88,6 +81,7 @@
         });
     }
 
+    // --- PRINT INVOICE ---
     window.printInvoiceWithQZ = async function (invoiceName, openDrawerFlag = false) {
         await ensureQZ();
 
@@ -118,6 +112,7 @@
         let data = resp.message;
         if (!Array.isArray(data)) data = [data];
 
+        // Add cut commands if configured
         if (cut_mode && cut_mode !== "None") {
             let cutData = "";
 
@@ -144,6 +139,7 @@
                 .catch(err => console.error("Print failed", err));
         }
 
+        // Auto open drawer if enabled
         if (openDrawerFlag && open_cash_drawer) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             let pin = parseInt(drawer_pin);
@@ -160,39 +156,40 @@
         }
     };
 
+    // POS sidebar drawer → use mapped printer (production use)
     window.open_drawer = async () => {
         try {
             await ensureQZ();
+
             const posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
             const mappingRes = await frappe.call({
                 method: "nextpos_printing.utils.settings.get_printer_for_pos",
                 args: { pos_profile: posProfile }
             });
 
-            if (mappingRes.message && mappingRes.message.printer) {
-                let pin = parseInt(mappingRes.message.drawer_pin) || 0;
-                let drawerCommand = {
-                    type: "raw",
-                    format: "hex",
-                    data: "1B70" + pin.toString(16).padStart(2, "0") + "3232"
-                };
-
-                console.log("[nextpos_printing] Manual Open Drawer:", drawerCommand.data);
-
-                const cfg = qz.configs.create(mappingRes.message.printer);
-                await qz.print(cfg, [drawerCommand]);
-                frappe.show_alert({ message: "Cash drawer opened", indicator: "green" });
-            } else {
+            if (!mappingRes.message || !mappingRes.message.printer) {
                 frappe.msgprint("No printer mapping found for this POS Profile.");
+                return;
             }
+
+            let pin = parseInt(mappingRes.message.drawer_pin) || 2;
+            let drawerCommand = {
+                type: "raw",
+                format: "hex",
+                data: "1B70" + pin.toString(16).padStart(2, "0") + "3232"
+            };
+
+            const cfg = qz.configs.create(mappingRes.message.printer);
+            await qz.print(cfg, [drawerCommand]);
+            frappe.show_alert({ message: "Cash drawer opened", indicator: "green" });
         } catch (err) {
             frappe.msgprint("Failed to open drawer: " + err);
         }
     };
 
+
     // --- SIDEBAR BUTTONS ---
     function add_sidebar_buttons() {
-        console.log("[nextpos_printing] add_sidebar_buttons called");
         const posWrapper = document.querySelector("#page-point-of-sale .point-of-sale-app");
         if (!posWrapper || document.getElementById("npp-sidebar-left")) return;
 
@@ -221,7 +218,7 @@
         `;
         posWrapper.appendChild(right);
 
-        // Bind actions…
+        // Bind actions
         document.getElementById("npp-btn-current").onclick = async () => {
             const invoice = cur_frm && cur_frm.doc;
             if (!invoice || invoice.doctype !== "POS Invoice") {
@@ -250,11 +247,9 @@
         };
 
         document.getElementById("npp-btn-drawer").onclick = window.open_drawer;
-
-        console.log("[nextpos_printing] Sidebars with icon buttons added");
     }
 
-    // --- Replace ERPNext print button ---
+    // --- Replace ERPNext Print Receipt button ---
     function replace_print_receipt_button() {
         const host = document.querySelector(".summary-btns");
         if (!host) return;
@@ -280,9 +275,9 @@
         };
 
         host.prepend(newBtn);
-        console.log("[nextpos_printing] Replaced ERPNext Print Receipt button with NPP icon version");
     }
 
+    // --- Observe for dynamic UI elements ---
     function watch_summary_btns() {
         const mo = new MutationObserver(() => replace_print_receipt_button());
         mo.observe(document.body, { childList: true, subtree: true });
@@ -303,6 +298,7 @@
         setTimeout(() => mo.disconnect(), 5000);
     }
 
+    // --- Auto-print after POS Invoice save ---
     async function autoPrintIfEnabled(invoice) {
         try {
             const res = await frappe.call({
@@ -319,6 +315,7 @@
         }
     }
 
+    // --- POS route hooks ---
     function on_pos_route() {
         const route = frappe.get_route_str && frappe.get_route_str();
         if (route === "point-of-sale") {

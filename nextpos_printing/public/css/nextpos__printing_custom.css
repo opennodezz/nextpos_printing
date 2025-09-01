@@ -1,23 +1,27 @@
+/* =========================================
+   NextPOS Printing – Sidebar Styles
+   ========================================= */
+
 /* Shared sidebar container */
 .npp-sidebar {
-    position: fixed;        /* fix to the viewport, not inside POS */
-    top: 80px;              /* below the header */
-    bottom: 20px;           /* leave some space at bottom */
-    width: 90px;            /* slim but enough for big buttons */
+    position: fixed;        /* float above POS */
+    top: 80px;              /* below ERPNext header */
+    bottom: 20px;           /* leave some room at bottom */
+    width: 90px;            /* slim column */
     display: flex;
     flex-direction: column;
     gap: 15px;
     padding: 10px;
-    background: transparent; /* no opaque background, let POS show */
-    z-index: 9999;          /* float above POS */
-    pointer-events: auto;   /* make buttons clickable */
+    background: transparent;
+    z-index: 9999;          /* stay on top of POS */
+    pointer-events: auto;   /* clickable */
 }
 
-/* Left and Right positions */
+/* Left & Right placement */
 .npp-left { left: 10px; }
 .npp-right { right: 10px; }
 
-/* Big square icon buttons */
+/* Big square buttons */
 .npp-btn {
     width: 70px;
     height: 70px;
@@ -37,7 +41,7 @@
     cursor: pointer;
 }
 
-/* Icons centered */
+/* Center icons */
 .npp-btn i {
     margin: 0 !important;
 }
