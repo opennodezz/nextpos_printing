@@ -32,6 +32,24 @@
         }
     }
 
+    // --- SETTINGS LOADER ---
+    async function loadNextPOSSettings() {
+        try {
+            const response = await frappe.call({
+                method: "nextpos_printing.api.settings.get_nextpos_settings"
+            });
+            return response.message;
+        } catch (e) {
+            console.error("[NextPOS] Failed to load settings:", e);
+            frappe.msgprint({
+                title: "NextPOS Settings Missing",
+                indicator: "red",
+                message: "Unable to load NextPOS Settings. Please contact Administrator."
+            });
+            throw e;
+        }
+    }
+
     // --- QZ SECURITY ---
     function setupQZSecurity() {
         if (!window.qz) return;
@@ -88,7 +106,7 @@
         let posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
 
         let res = await frappe.call({
-            method: "nextpos_printing.utils.settings.get_printer_for_pos",
+            method: "nextpos_printing.api.settings.get_printer_for_pos",
             args: { pos_profile: posProfile }
         });
 
@@ -163,7 +181,7 @@
 
             const posProfile = (cur_frm && cur_frm.doc && cur_frm.doc.pos_profile) || null;
             const mappingRes = await frappe.call({
-                method: "nextpos_printing.utils.settings.get_printer_for_pos",
+                method: "nextpos_printing.api.settings.get_printer_for_pos",
                 args: { pos_profile: posProfile }
             });
 
@@ -186,7 +204,6 @@
             frappe.msgprint("Failed to open drawer: " + err);
         }
     };
-
 
     // --- SIDEBAR BUTTONS ---
     function add_sidebar_buttons() {
@@ -301,12 +318,9 @@
     // --- Auto-print after POS Invoice save ---
     async function autoPrintIfEnabled(invoice) {
         try {
-            const res = await frappe.call({
-                method: "frappe.client.get",
-                args: { doctype: "NextPOS Settings", name: "NextPOS Settings" }
-            });
+            const settings = await loadNextPOSSettings();
 
-            if (res.message && res.message.enable_auto_print) {
+            if (settings && settings.enable_auto_print) {
                 console.log("[nextpos_printing] Auto-print enabled, sending invoice", invoice.name);
                 await printInvoiceWithQZ(invoice.name, true);
             }
@@ -316,9 +330,12 @@
     }
 
     // --- POS route hooks ---
-    function on_pos_route() {
+    async function on_pos_route() {
         const route = frappe.get_route_str && frappe.get_route_str();
         if (route === "point-of-sale") {
+            // Ensure settings exist on POS load
+            await loadNextPOSSettings();
+
             setTimeout(wait_for_toolbar_then_mount, 300);
             setTimeout(watch_summary_btns, 300);
 

@@ -1,10 +1,10 @@
 import frappe
 
-@frappe.whitelist()
-def get_printer_for_pos(pos_profile):
+
+def get_printer_for_pos(pos_profile=None):
     """Return printer mapping for a given POS Profile,
     with fallback to default printer and global cut mode."""
-    settings = frappe.get_single("NextPOS Settings")
+    settings = get_nextpos_settings()
 
     # Default values
     printer = settings.default_printer
@@ -15,10 +15,11 @@ def get_printer_for_pos(pos_profile):
     open_cash_drawer = bool(settings.open_cash_drawer)
 
     # Try to find a specific mapping for this POS Profile
-    for row in settings.printer_mappings:
-        if row.pos_profile == pos_profile:
-            printer = row.printer
-            break
+    if hasattr(settings, "printer_mappings"):
+        for row in settings.printer_mappings:
+            if row.pos_profile == pos_profile:
+                printer = row.printer
+                break
 
     return {
         "printer": printer,
@@ -28,3 +29,8 @@ def get_printer_for_pos(pos_profile):
         "drawer_pin": drawer_pin,
         "open_cash_drawer": open_cash_drawer,
     }
+
+
+def get_nextpos_settings():
+    """Return the single NextPOS Settings document."""
+    return frappe.get_single("NextPOS Settings")

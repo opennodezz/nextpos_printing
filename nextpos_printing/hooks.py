@@ -16,6 +16,9 @@ page_js = {
 
 app_include_css = ["/assets/nextpos_printing/css/nextpos__printing_custom.css"]
 
+after_install = "nextpos_printing.install.create_default_settings"
+
+
 
 
 #--------------------------------------------NextPOS Printing app additions end
