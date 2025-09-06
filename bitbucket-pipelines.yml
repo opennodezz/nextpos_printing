@@ -10,20 +10,27 @@ pipelines:
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
+            # Copy the whole app folder (including inner package) into clean repo
             - mkdir publish
             - cp -r nextpos_printing/* publish/
+
+            # remove unwanted files
+            - rm -f publish/bitbucket-pipelines.yml
+            - rm -f publish/README_DEV.md
+            - rm -f publish/README.md
+            - rm -f publish/ReleaseChecklist.md
+            
             - cd publish
             - git init
             - git checkout -b main
 
-            # Define GitHub URL in a variable to shorten line length
+            # Short variable keeps line length <80 chars
             - |
-              GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/opennodezz"
-              git remote add github "${GITHUB_URL}/nextpos_printing.git"
+              GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com"
+              git remote add github \
+                "${GITHUB_URL}/opennodezz/nextpos_printing.git"
 
             - git add .
-
-            # Commit message broken into multiple lines (<80 chars each)
             - |
               git commit -m "CI: publish app from Bitbucket $(date)" \
                 --allow-empty
