@@ -16,7 +16,7 @@ pipelines:
             - rm -f ReleaseChecklist.md
             # Initialize new repo and push
             - git init
-            - git checkout -b main
+            - git checkout -B main
             - |
               GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com"
               REPO_PATH="opennodezz/nextpos_printing.git"
