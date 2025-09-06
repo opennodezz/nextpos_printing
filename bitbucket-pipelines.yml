@@ -9,20 +9,20 @@ pipelines:
           script:
             - git config --global user.email "ci-bot@ci.local"
             - git config --global user.name "Bitbucket CI Bot"
-            # Init a fresh repo for publishing
             - git init
             - git checkout -B main
             - |
               GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com"
               REPO_PATH="opennodezz/nextpos_printing.git"
-              git remote add github "${GITHUB_URL}/${REPO_PATH}"
-            # Use .gitignore_publish to exclude files when staging
+              git remote add github \
+                "${GITHUB_URL}/${REPO_PATH}"
+            # Remove unwanted files before staging
             - |
-              for file in $(find . -type f \
-                | sed 's|^\./||' \
-                | grep -v -f .gitignore_publish); do
-                git add "$file"
-              done
+              rm -f bitbucket-pipelines.yml \
+                README_DEV.md \
+                README.md \
+                ReleaseChecklist.md
+            - git add .
             - |
               git commit -m "CI: publish app from Bitbucket $(date)" \
                 --allow-empty
