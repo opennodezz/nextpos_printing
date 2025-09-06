@@ -56,20 +56,18 @@ frappe.ui.form.on("NextPOS Settings", {
             frappe.call({
                 method: "nextpos_printing.api.qz.qz_generate_or_show_keys",
             }).then(r => {
-                if (r.message && r.message.public_key) {
-                    const pubKey = r.message.public_key;
+                if (r.message && r.message.certificate_available) {
                     const newlyGenerated = r.message.newly_generated;
 
                     let html = `
                         <p>Private key is stored in <code>site_config.json</code>.</p>
-                        <p>Copy the following Public Key into your QZ Tray trust store:</p>
-                        <textarea readonly style="width:100%;height:200px;">${pubKey}</textarea>
-                        <br>
-                        <button class="btn btn-sm btn-primary" id="copy-qz-key">
-                            Copy Public Key
-                        </button>
+                        <p>Download the certificate below and import it into QZ Tray:</p>
+                        <a href="/api/method/nextpos_printing.api.qz.download_qz_certificate"
+                           class="btn btn-sm btn-primary">
+                           Download Certificate (.pem)
+                        </a>
                         <p>
-                          See how to trust the key manually in QZ Tray.
+                          In QZ Tray, go to <b>Advanced → Site Manager</b> and import this file.
                         </p>
                     `;
 
@@ -78,43 +76,6 @@ frappe.ui.form.on("NextPOS Settings", {
                         indicator: "green",
                         message: html
                     });
-
-                    // Safe clipboard logic with fallback
-                    setTimeout(() => {
-                        const btn = document.getElementById("copy-qz-key");
-                        if (btn) {
-                            const fallbackCopy = () => {
-                                const el = document.createElement("textarea");
-                                el.value = pubKey;
-                                el.setAttribute("readonly", "");
-                                el.style.position = "absolute";
-                                el.style.left = "-9999px";
-                                document.body.appendChild(el);
-                                el.select();
-                                document.execCommand("copy");
-                                document.body.removeChild(el);
-                                frappe.show_alert({
-                                    message: "Public key copied to clipboard",
-                                    indicator: "green"
-                                });
-                            };
-
-                            const copyKey = () => {
-                                if (navigator.clipboard && navigator.clipboard.writeText) {
-                                    navigator.clipboard.writeText(pubKey)
-                                        .then(() => frappe.show_alert({ message: "Public key copied to clipboard", indicator: "green" }))
-                                        .catch(err => {
-                                            console.error("Clipboard API failed, using fallback:", err);
-                                            fallbackCopy();
-                                        });
-                                } else {
-                                    fallbackCopy();
-                                }
-                            };
-
-                            btn.addEventListener("click", copyKey);
-                        }
-                    }, 300);
                 }
             }).catch(err => {
                 frappe.msgprint({
