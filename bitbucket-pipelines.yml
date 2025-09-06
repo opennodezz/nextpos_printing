@@ -1,45 +1,48 @@
 ---
-# Bitbucket pipeline to publish only the "nextpos_printing" app folder
-# into GitHub as a proper Frappe app repo.
-# This ensures that GitHub repo root contains setup.py, MANIFEST.in, etc.
+# Bitbucket pipeline: publish ONLY the nextpos_printing app folder
+# to GitHub as a clean Frappe app repo.
+# Ensures GitHub root = app root (setup.py, MANIFEST.in, etc.)
 
-image: atlassian/default-image:latest   # Default build image from Atlassian
+image: atlassian/default-image:latest   # Use Atlassian’s default CI image
 
 pipelines:
   branches:
-    main:   # Trigger this pipeline when pushing to Bitbucket "main" branch
+    main:   # Trigger when pushing to Bitbucket "main" branch
       - step:
-          name: Publish App Folder to GitHub   # Name visible in Bitbucket UI
+          name: Publish App Folder to GitHub
           script:
-            # 1. Configure Git user identity for commits
+            # 1. Configure Git identity (needed for commits in CI)
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
-            # 2. Create a clean working directory for publish
+            # 2. Create a clean working directory for publishing
             - mkdir publish
 
-            # 3. Copy ONLY the app folder into this directory
-            # (avoids copying readme/pipeline files from repo root)
+            # 3. Copy ONLY the app folder contents (no pipelines/docs/etc.)
             - cp -r nextpos_printing/* publish/
 
-            # 4. Initialize a fresh Git repo with just the app content
+            # (Optional) Debug step: list copied files
+            - ls -R publish
+
+            # 4. Initialize a fresh git repo with the copied files
             - cd publish
             - git init
-            - git checkout -b main
+            - git checkout -b main   # Create a main branch
 
-            # 5. Add GitHub as remote, using token for authentication
-            # (store token securely in Bitbucket repo variables)
+            # 5. Add GitHub as a remote using a Personal Access Token (PAT)
+            # Token must be saved in Bitbucket Repo Variables as:
+            #   NEXTPOS_PRINTING_PA_TOKEN_GITHUB
             - >
               git remote add github
               https://x-access-token:${NEXTPOS_PRINTING_PA_TOKEN_GITHUB}@github.com/opennodezz/nextpos_printing.git
 
-            # 6. Stage all files in the publish directory
+            # 6. Stage all files
             - git add .
 
-            # 7. Commit the app snapshot (skip error if no changes)
+            # 7. Commit changes (skip error if nothing new)
             - >
               git commit -m "CI: publish app from Bitbucket $(date)" \
               || echo "No changes to commit"
 
-            # 8. Force-push to GitHub main branch
+            # 8. Push to GitHub, force-replacing branch each time
             - git push github main --force
