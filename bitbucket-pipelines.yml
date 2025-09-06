@@ -11,7 +11,7 @@ pipelines:
             - git config --global user.name "Bitbucket CI Bot"
             # Init a fresh repo for publishing
             - git init
-            - git checkout -b main
+            - git checkout -B main
             - |
               GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com"
               REPO_PATH="opennodezz/nextpos_printing.git"
