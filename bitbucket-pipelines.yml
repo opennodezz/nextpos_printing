@@ -2,12 +2,13 @@
 # Bitbucket pipeline: publish ONLY the nextpos_printing app folder
 # to GitHub as a clean Frappe app repo.
 # Ensures GitHub root = app root (setup.py, MANIFEST.in, etc.)
+# Optimized for Bitbucket Free Plan (minimal steps).
 
-image: atlassian/default-image:latest   # Use Atlassian’s default CI image
+image: atlassian/default-image:latest
 
 pipelines:
   branches:
-    main:   # Trigger when pushing to Bitbucket "main" branch
+    main:
       - step:
           name: Publish App Folder to GitHub
           script:
@@ -15,34 +16,21 @@ pipelines:
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
-            # 2. Create a clean working directory for publishing
+            # 2. Copy ONLY the app folder into a fresh git repo
             - mkdir publish
-
-            # 3. Copy ONLY the app folder contents (no pipelines/docs/etc.)
             - cp -r nextpos_printing/* publish/
-
-            # (Optional) Debug step: list copied files
-            - ls -R publish
-
-            # 4. Initialize a fresh git repo with the copied files
             - cd publish
             - git init
-            - git checkout -b main   # Create a main branch
+            - git checkout -b main
 
-            # 5. Add GitHub as a remote using a Personal Access Token (PAT)
-            # Token must be saved in Bitbucket Repo Variables as:
-            #   NEXTPOS_PRINTING_PA_TOKEN_GITHUB
+            # 3. Add GitHub remote (token stored in Bitbucket repo variable)
             - >
               git remote add github
               https://x-access-token:${NEXTPOS_PRINTING_PA_TOKEN_GITHUB}@github.com/opennodezz/nextpos_printing.git
 
-            # 6. Stage all files
+            # 4. Stage and commit (always allow commit, even if no changes)
             - git add .
+            - git commit -m "CI: publish app from Bitbucket $(date)" --allow-empty
 
-            # 7. Commit changes (skip error if nothing new)
-            - >
-              git commit -m "CI: publish app from Bitbucket $(date)" \
-              || echo "No changes to commit"
-
-            # 8. Push to GitHub, force-replacing branch each time
+            # 5. Push to GitHub, replacing branch each time
             - git push github main --force
