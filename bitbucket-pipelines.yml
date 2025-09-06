@@ -1,36 +1,31 @@
 ---
-# Bitbucket pipeline: publish ONLY the nextpos_printing app folder
-# to GitHub as a clean Frappe app repo.
-# Ensures GitHub root = app root (setup.py, MANIFEST.in, etc.)
-# Optimized for Bitbucket Free Plan (minimal steps).
-
 image: atlassian/default-image:latest
 
 pipelines:
   branches:
     main:
       - step:
-          name: Publish App Folder to GitHub
+          name: Publish App to GitHub
           script:
-            # 1. Configure Git identity (needed for commits in CI)
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
-            # 2. Copy ONLY the app folder into a fresh git repo
             - mkdir publish
             - cp -r nextpos_printing/* publish/
             - cd publish
             - git init
             - git checkout -b main
 
-            # 3. Add GitHub remote (token stored in Bitbucket repo variable)
-            - >
-              git remote add github
-              https://x-access-token:${NEXTPOS_PRINTING_PA_TOKEN_GITHUB}@github.com/opennodezz/nextpos_printing.git
+            # Define GitHub URL in a variable to shorten line length
+            - |
+              GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/opennodezz"
+              git remote add github "${GITHUB_URL}/nextpos_printing.git"
 
-            # 4. Stage and commit (always allow commit, even if no changes)
             - git add .
-            - git commit -m "CI: publish app from Bitbucket $(date)" --allow-empty
 
-            # 5. Push to GitHub, replacing branch each time
+            # Commit message broken into multiple lines (<80 chars each)
+            - |
+              git commit -m "CI: publish app from Bitbucket $(date)" \
+                --allow-empty
+
             - git push github main --force
