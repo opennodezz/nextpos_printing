@@ -6,7 +6,6 @@ pipelines:
       - step:
           name: Publish App Folder to GitHub
           script:
-            # Set up Git user for commits
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
@@ -24,5 +23,5 @@ pipelines:
 
             # Commit and push
             - git add .
-            - git commit -m "CI: publish app from Bitbucket $(date)"
+            - git commit -m "CI: publish app from Bitbucket $(date)" || echo "No changes to commit"
             - git push github main --force
