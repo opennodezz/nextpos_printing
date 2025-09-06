@@ -9,13 +9,12 @@ pipelines:
           script:
             - git config --global user.email "ci-bot@ci.local"
             - git config --global user.name "Bitbucket CI Bot"
-            - mkdir publish
-            - cp -r nextpos_printing/* publish/
-            - rm -f publish/bitbucket-pipelines.yml
-            - rm -f publish/README_DEV.md
-            - rm -f publish/README.md
-            - rm -f publish/ReleaseChecklist.md
-            - cd publish
+            # Remove unwanted files before publishing
+            - rm -f bitbucket-pipelines.yml
+            - rm -f README_DEV.md
+            - rm -f README.md
+            - rm -f ReleaseChecklist.md
+            # Initialize new repo and push
             - git init
             - git checkout -b main
             - |
