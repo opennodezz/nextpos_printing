@@ -11,13 +11,18 @@ pipelines:
             - git config --global user.name "Bitbucket CI Bot"
             # Init a fresh repo for publishing
             - git init
-            - git checkout -B main
+            - git checkout -b main
             - |
               GITHUB_URL="https://x-access-token:${GITHUB_TOKEN}@github.com"
               REPO_PATH="opennodezz/nextpos_printing.git"
               git remote add github "${GITHUB_URL}/${REPO_PATH}"
-            # Add everything except files listed in .gitignore_publish
-            - git add . ":(exclude).gitignore_publish"
+            # Use .gitignore_publish to exclude files when staging
+            - |
+              for file in $(find . -type f \
+                | sed 's|^\./||' \
+                | grep -v -f .gitignore_publish); do
+                git add "$file"
+              done
             - |
               git commit -m "CI: publish app from Bitbucket $(date)" \
                 --allow-empty
