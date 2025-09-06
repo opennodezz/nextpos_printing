@@ -2,19 +2,27 @@ image: atlassian/default-image:latest
 
 pipelines:
   branches:
-    main:   # This section runs whenever you push to 'main'
+    main:   # Runs whenever you push to 'main' in Bitbucket
       - step:
-          name: Mirror to GitHub
+          name: Publish App Folder to GitHub
           script:
-            # Set up a Git user for the pipeline (needed for pushes)
+            # Set up Git user for commits
             - git config --global user.email "ci-bot@yourdomain.com"
             - git config --global user.name "Bitbucket CI Bot"
 
-            # Add GitHub as a remote (using your GitHub token for auth)
+            # Create a clean work directory
+            - mkdir publish
+            - cp -r nextpos_printing/* publish/
+
+            # Initialize a fresh repo with only the app content
+            - cd publish
+            - git init
+            - git checkout -b main
+
+            # Add GitHub as a remote (with token auth)
             - git remote add github https://x-access-token:${NEXTPOS_PRINTING_PA_TOKEN_GITHUB}@github.com/opennodezz/nextpos_printing.git
 
-            # Make sure we’re on the right branch
-            - git checkout main
-
-            # Push code from Bitbucket → GitHub
+            # Commit and push
+            - git add .
+            - git commit -m "CI: publish app from Bitbucket $(date)"
             - git push github main --force
